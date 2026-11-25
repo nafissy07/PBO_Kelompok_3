@@ -63,6 +63,24 @@ class MenuDAO(BaseDAO[Menu]):
     def jumlah(self) -> int:
         return self._db.fetch_one("SELECT COUNT(*) AS n FROM menu")["n"]
 
+    def migrasi_data_lama(self):
+        """Rapikan data dari versi lama supaya cocok dengan aturan kategori dan jenis.
+
+        - Kategori lama Kopi / Non-Kopi menjadi JENIS dari kategori Minuman.
+        - Jenis yang tidak ada di daftar JENIS kategorinya diganti ke pilihan pertama.
+        Daftar jenis dibaca dari class (Minuman.JENIS dan Makanan.JENIS), jadi kalau
+        jenis baru ditambahkan di sana, data tidak ikut diubah. Aman dijalankan berulang.
+        """
+        from models.menu import Makanan, Minuman
+        perintah = [("UPDATE menu SET jenis = kategori, kategori = 'Minuman' "
+                     "WHERE kategori IN ('Kopi', 'Non-Kopi')", ())]
+        for kategori, kelas in (("Minuman", Minuman), ("Makanan", Makanan)):
+            tanda = ",".join("?" * len(kelas.JENIS))
+            perintah.append((
+                f"UPDATE menu SET jenis = ? WHERE kategori = ? AND jenis NOT IN ({tanda})",
+                (kelas.JENIS[0], kategori, *kelas.JENIS)))
+        self._db.execute_atomik(perintah)
+
 
 class TransaksiDAO(BaseDAO[Transaksi]):
     def _id_berikutnya(self) -> str:

@@ -12,15 +12,16 @@ from models.transaksi import RiwayatTransaksi, Transaksi
 
 # Menu awal, hanya dimasukkan kalau tabel menu masih kosong.
 MENU_AWAL = [
-    ("Kopi", "Espresso", "Espresso", 18000),
-    ("Kopi", "Americano", "Espresso", 20000),
-    ("Kopi", "Cappuccino", "Susu", 25000),
-    ("Kopi", "Kopi Susu Gula Aren", "Susu", 22000),
-    ("Non-Kopi", "Matcha Latte", "Teh", 26000),
-    ("Non-Kopi", "Coklat Panas", "Coklat", 23000),
-    ("Non-Kopi", "Teh Lemon", "Teh", 15000),
-    ("Makanan", "Croissant", "Roti", 20000),
-    ("Makanan", "Roti Bakar Coklat", "Roti", 17000),
+    ("Minuman", "Espresso", "Kopi", 18000),
+    ("Minuman", "Americano", "Kopi", 20000),
+    ("Minuman", "Cappuccino", "Kopi", 25000),
+    ("Minuman", "Kopi Susu Gula Aren", "Kopi", 22000),
+    ("Minuman", "Matcha Latte", "Non-Kopi", 26000),
+    ("Minuman", "Coklat Panas", "Non-Kopi", 23000),
+    ("Minuman", "Teh Lemon", "Non-Kopi", 15000),
+    ("Makanan", "Croissant", "Makanan Ringan", 20000),
+    ("Makanan", "Roti Bakar Coklat", "Makanan Ringan", 17000),
+    ("Minuman", "Fresh Milk", "Susu", 18000),
 ]
 
 
@@ -32,6 +33,7 @@ class KedaiController:
         self._riwayat = RiwayatTransaksi(self._transaksi_dao)
         self._kedai = KedaiKopi("Coffee Order System")
         self._kasir = Kasir(nama_kasir, "KSR-01")
+        self._menu_dao.migrasi_data_lama()      # rapikan data dari versi lama
         self._isi_menu_awal()
         self.muat_ulang_menu()
 

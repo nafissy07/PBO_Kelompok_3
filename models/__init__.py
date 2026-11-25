@@ -1,4 +1,4 @@
-from models.menu import Kopi, Makanan, Menu, NonKopi
+from models.menu import Makanan, Menu, Minuman
 from models.pesanan import ItemPesanan, Pesanan
 from models.transaksi import PembayaranKurangError, RiwayatTransaksi, Transaksi
 from models.orang import Kasir, Orang, Pelanggan, Pelayanan

@@ -6,7 +6,7 @@ import unittest
 from controllers.kedai_controller import KedaiController
 from database.dao import MenuDAO, TransaksiDAO
 from database.database_manager import DatabaseManager
-from models import (Kasir, Kopi, Makanan, Menu, NonKopi, Orang, Pelanggan,
+from models import (Kasir, Makanan, Menu, Minuman, Orang, Pelanggan,
                     PembayaranKurangError, Pelayanan, Pesanan)
 
 
@@ -16,35 +16,48 @@ class TestMenu(unittest.TestCase):
             Menu("X", 1000)
 
     def test_polymorphism_info_menu(self):
-        daftar = [Kopi("Latte", 25000, "Susu"), NonKopi("Teh", 15000, "Teh"),
-                  Makanan("Roti", 17000, "Roti")]
-        hasil = [m.info_menu() for m in daftar]
-        self.assertTrue(hasil[0].startswith("[Kopi]"))
-        self.assertTrue(hasil[1].startswith("[Non-Kopi]"))
-        self.assertTrue(hasil[2].startswith("[Makanan]"))
+        minuman, makanan = Minuman("Latte", 25000, "Kopi"), Makanan("Roti Bakar", 17000, "Makanan Ringan")
+        self.assertTrue(minuman.info_menu().startswith("[Minuman]"))
+        self.assertTrue(makanan.info_menu().startswith("[Makanan]"))
 
     def test_factory_dan_inheritance(self):
-        m = Menu.buat("Non-Kopi", "Matcha", 26000, "Teh")
-        self.assertIsInstance(m, NonKopi)
+        m = Menu.buat("Minuman", "Matcha", 26000, "Non-Kopi")
+        self.assertIsInstance(m, Minuman)
         self.assertIsInstance(m, Menu)
         with self.assertRaises(ValueError):
-            Menu.buat("Tidak Ada", "X", 1000)
+            Menu.buat("Kopi", "X", 1000, "Kopi")          # kategori lama sudah tidak ada
+
+    def test_jenis_mengikuti_kategori(self):
+        self.assertEqual(Menu.daftar_kategori(), ["Minuman", "Makanan"])
+        self.assertEqual(Menu.daftar_jenis("Minuman"), ["Kopi", "Non-Kopi", "Susu"])
+        self.assertEqual(Menu.daftar_jenis("Makanan"), ["Makanan Ringan", "Makanan Berat", "Cemilan"])
+        with self.assertRaises(ValueError):
+            Minuman("Es Teh", 8000, "Cemilan")              # Cemilan bukan jenis minuman
+        with self.assertRaises(ValueError):
+            Makanan("Roti", 8000, "Susu")                   # Susu bukan jenis makanan
+        self.assertEqual(Makanan("Kentang", 15000, "cemilan").jenis, "Cemilan")
+        self.assertEqual(Minuman("Es Teh", 8000, "non-kopi").jenis, "Non-Kopi")
+
+    def test_ikon_sesuai_jenis(self):
+        self.assertEqual(Minuman("A", 1000, "Kopi").ikon, "☕")
+        self.assertEqual(Minuman("B", 1000, "Susu").ikon, "🥛")
+        self.assertEqual(Makanan("C", 1000, "Cemilan").ikon, "🍟")
 
     def test_validasi_encapsulation(self):
-        m = Kopi("Espresso", 18000)
+        m = Minuman("Espresso", 18000, "Kopi")
         m.ubah_harga(20000)
         self.assertEqual(m.harga, 20000)
         for salah in (0, -5, "abc"):
             with self.assertRaises(ValueError):
                 m.ubah_harga(salah)
         with self.assertRaises(ValueError):
-            Kopi("  ", 1000)
+            Minuman("  ", 1000, "Kopi")
 
 
 class TestPesananDanTransaksi(unittest.TestCase):
     def setUp(self):
-        self.kopi = Kopi("Kopi Susu", 22000, "Susu", 1)
-        self.roti = Makanan("Croissant", 20000, "Roti", 2)
+        self.kopi = Minuman("Kopi Susu", 22000, "Kopi", 1)
+        self.roti = Makanan("Croissant", 20000, "Makanan Ringan", 2)
 
     def test_hitung_total_dan_item(self):
         p = Pesanan()
@@ -103,7 +116,6 @@ class TestOrang(unittest.TestCase):
     def test_ubah_nama_kasir(self):
         kasir = Kasir("Azhalia")
         kasir.ubah_nama("Nafis")
-        kasir.ubah_nama("Rozaan")
         self.assertEqual(kasir.nama, "Nafis")
         with self.assertRaises(ValueError):
             kasir.ubah_nama("")
@@ -127,22 +139,37 @@ class TestDatabase(unittest.TestCase):
 
     def test_menu_dao_crud(self):
         dao = MenuDAO(self.db)
-        m = dao.simpan(Kopi("Latte", 25000, "Susu"))
+        m = dao.simpan(Minuman("Latte", 25000, "Susu"))
         self.assertIsNotNone(m.id)
         m.ubah_harga(27000)
         dao.simpan(m)
         dibaca = dao.cari_id(m.id)
-        self.assertIsInstance(dibaca, Kopi)
+        self.assertIsInstance(dibaca, Minuman)
         self.assertEqual(dibaca.harga, 27000)
         dao.hapus(m.id)
         self.assertIsNone(dao.cari_id(m.id))
+
+    def test_migrasi_data_versi_lama(self):
+        dao = MenuDAO(self.db)
+        for kat, nama, jenis in (("Kopi", "Latte", "Susu"), ("Non-Kopi", "Teh", "Teh"),
+                                 ("Makanan", "Roti Bakar", "Roti"), ("Makanan", "Bakso", "Lainnya"), ("Makanan", "Nasi Goreng", "Makanan Berat")):
+            self.db.execute("INSERT INTO menu (nama, kategori, jenis, harga) VALUES (?,?,?,?)",
+                            (nama, kat, jenis, 10000))
+        dao.migrasi_data_lama()
+        dao.migrasi_data_lama()                                   # aman dijalankan ulang
+        hasil = {m.nama: (m.kategori, m.jenis) for m in dao.semua()}
+        self.assertEqual(hasil["Latte"], ("Minuman", "Kopi"))
+        self.assertEqual(hasil["Teh"], ("Minuman", "Non-Kopi"))
+        self.assertEqual(hasil["Roti Bakar"], ("Makanan", "Makanan Ringan"))      # jenis lama diganti ke pilihan pertama
+        self.assertEqual(hasil["Bakso"], ("Makanan", "Makanan Ringan"))
+        self.assertEqual(hasil["Nasi Goreng"], ("Makanan", "Makanan Berat"))   # jenis yang valid tidak diubah
 
     def test_transaksi_dao_simpan_dan_cari(self):
         dao = TransaksiDAO(self.db)
         kasir = Kasir("Azhalia")
         for nama, kopi in (("Dina", "Latte"), ("Rafi", "Americano")):
             p = Pesanan(nama)
-            p.tambah_item(Kopi(kopi, 20000, "", 1), 2)
+            p.tambah_item(Minuman(kopi, 20000, "Kopi", 1), 2)
             dao.simpan(kasir.proses_pesanan(p, 50000))
         semua = dao.semua()
         self.assertEqual([t.id_transaksi for t in semua], ["TRX-0002", "TRX-0001"])
@@ -163,17 +190,23 @@ class TestController(unittest.TestCase):
         DatabaseManager.reset()
 
     def test_menu_awal_dan_filter(self):
-        self.assertEqual(len(self.ctrl.daftar_menu()), 9)
+        self.assertEqual(len(self.ctrl.daftar_menu()), 10)
         self.assertEqual(len(self.ctrl.daftar_menu("Makanan")), 2)
+        self.assertEqual(len(self.ctrl.daftar_menu("Minuman")), 8)
         self.assertEqual(len(self.ctrl.daftar_menu(kata="kopi")), 1)
 
     def test_tambah_ubah_hapus_menu(self):
-        m = self.ctrl.tambah_menu("Kopi", "Vietnam Drip", "Susu", 24000)
-        self.assertEqual(len(self.ctrl.daftar_menu()), 10)
-        self.ctrl.ubah_menu(m.id, "Non-Kopi", "Vietnam Drip", "Susu", 25000)
-        self.assertEqual(self.ctrl.cari_menu(m.id).kategori, "Non-Kopi")
+        m = self.ctrl.tambah_menu("Minuman", "Vietnam Drip", "Kopi", 24000)
+        self.assertEqual(len(self.ctrl.daftar_menu()), 11)
+        self.ctrl.ubah_menu(m.id, "Makanan", "Roti Keju", "Makanan Ringan", 25000)
+        self.assertEqual(self.ctrl.cari_menu(m.id).kategori, "Makanan")
+        with self.assertRaises(ValueError):
+            self.ctrl.tambah_menu("Makanan", "Salah", "Susu", 5000)   # jenis tidak cocok kategori
+        m2 = self.ctrl.tambah_menu("Makanan", "Kentang Goreng", "Cemilan", 15000)
+        self.assertEqual(self.ctrl.cari_menu(m2.id).jenis, "Cemilan")
+        self.ctrl.hapus_menu(m2.id)
         self.ctrl.hapus_menu(m.id)
-        self.assertEqual(len(self.ctrl.daftar_menu()), 9)
+        self.assertEqual(len(self.ctrl.daftar_menu()), 10)
 
     def test_alur_lengkap_pemesanan(self):
         self.assertEqual(self.ctrl.ringkasan()["jumlah_transaksi"], 0)

@@ -61,7 +61,7 @@ def _katalog(ctrl):
         kolom = st.columns(3)
         for i, menu in enumerate(daftar):
             with kolom[i % 3]:
-                st.button(f"{type(menu).IKON} {menu.nama} · {rupiah(menu.harga)}",
+                st.button(f"{menu.ikon} {menu.nama} · {rupiah(menu.harga)}",
                           key=f"tambah_{menu.id}", on_click=_tambah, args=(menu,),
                           **LEBAR_PENUH)
 
