@@ -103,6 +103,7 @@ class TestOrang(unittest.TestCase):
     def test_ubah_nama_kasir(self):
         kasir = Kasir("Azhalia")
         kasir.ubah_nama("Nafis")
+        kasir.ubah_nama("Rozaan")
         self.assertEqual(kasir.nama, "Nafis")
         with self.assertRaises(ValueError):
             kasir.ubah_nama("")
